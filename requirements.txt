@@ -2,4 +2,5 @@ streamlit
 pandas
 pillow
 google-genai
+google-api-core
 openpyxl
