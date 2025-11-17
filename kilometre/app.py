@@ -118,9 +118,6 @@ if st.button("🚀 Kilometre Okumayı Başlat"):
     if sonuçlar:
         df = pd.DataFrame(sonuçlar)
 
-        st.subheader("📊 İşlem Sonuçları")
-        st.dataframe(df, use_container_width=True)
-
         # km değerlerini analiz et
         df_km = df["km"].value_counts()
         df_km = df_km.reset_index()
@@ -167,7 +164,7 @@ if st.button("🚀 Kilometre Okumayı Başlat"):
 
             with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
                 result.to_excel(writer, sheet_name="Sonuçlar", index=False)
-                df.to_excel(writer, sheet_name="Ham Veri", index=False)
+                # df.to_excel(writer, sheet_name="Ham Veri", index=False)
             
             buffer.seek(0)
 
@@ -180,4 +177,5 @@ if st.button("🚀 Kilometre Okumayı Başlat"):
 
             st.success("✅ İşlem tamamlandı!")
         else:
+
             st.warning("Eşleştirme yapılabilecek yeterli veri bulunamadı.")
