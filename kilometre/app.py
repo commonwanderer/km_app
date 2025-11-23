@@ -9,6 +9,7 @@ from google import genai
 from google.api_core.exceptions import ResourceExhausted
 from datetime import datetime
 import io
+import re
 
 # ======================================================
 # Streamlit Arayüz Başlığı
@@ -119,37 +120,65 @@ if st.button("🚀 Kilometre Okumayı Başlat"):
         df = pd.DataFrame(sonuçlar)
 
         # km değerlerini analiz et
-        df_km = df["km"].value_counts()
-        df_km = df_km.reset_index()
-        df_km.columns = ["km", "count"]
-
+        df_km = df.copy()
+        
         # km yazısını temizle ve sayıya çevir
-        df_km["km"] = df_km["km"].str.replace(" km", "").str.replace("km", "")
-        df_km["km"] = df_km["km"].str.extract(r"(\d+)")
-        df_km = df_km.dropna()  # Boş değerleri kaldır
-        df_km["km"] = df_km["km"].astype(int)
+        df_km["km_temiz"] = df_km["km"].str.replace(" km", "").str.replace("km", "")
+        df_km["km_sayi"] = df_km["km_temiz"].str.extract(r"(\d+)")
+        df_km = df_km.dropna(subset=["km_sayi"])  # Boş değerleri kaldır
+        df_km["km_sayi"] = df_km["km_sayi"].astype(int)
 
-        # Sırala
-        df_km = df_km.sort_values("km").reset_index(drop=True)
+        # Tarih ve saat bilgilerini çıkar (WhatsApp Image 2025-10-22 at 22.13.41.jpeg formatından)
+        def extract_datetime(filename):
+            # WhatsApp Image 2025-10-22 at 22.13.41 formatını yakala
+            pattern = r'(\d{4})-(\d{2})-(\d{2})\s+at\s+(\d{2})\.(\d{2})\.(\d{2})'
+            match = re.search(pattern, filename)
+            if match:
+                year, month, day, hour, minute, second = match.groups()
+                tarih = f"{day}.{month}.{year}"
+                saat = f"{hour}:{minute}"
+                return tarih, saat
+            return None, None
+
+        df_km["tarih"], df_km["saat"] = zip(*df_km["dosya_adi"].apply(extract_datetime))
+        
+        # Sırala (km'ye göre)
+        df_km = df_km.sort_values("km_sayi").reset_index(drop=True)
 
         # Giriş-Çıkış eşleştirme
         pairs = []
         i = 0
         while i < len(df_km) - 1:
-            km1 = df_km.loc[i, "km"]
-            km2 = df_km.loc[i+1, "km"]
+            km1 = df_km.loc[i, "km_sayi"]
+            km2 = df_km.loc[i+1, "km_sayi"]
+            
+            dosya1 = df_km.loc[i, "dosya_adi"]
+            dosya2 = df_km.loc[i+1, "dosya_adi"]
+            tarih1 = df_km.loc[i, "tarih"]
+            saat1 = df_km.loc[i, "saat"]
+            tarih2 = df_km.loc[i+1, "tarih"]
+            saat2 = df_km.loc[i+1, "saat"]
 
             if km1 == km2 or abs(km2 - km1) == 1:
                 if i+1 < len(df_km):
-                    df_km.loc[i+1, "km"] -= 1
+                    df_km.loc[i+1, "km_sayi"] -= 1
                 i += 1
             else:
-                pairs.append((km1, km2))
+                pairs.append({
+                    "TARİH": tarih1 if tarih1 else "",
+                    "PERSONEL": "",
+                    "ARAÇ PLAKA": "",
+                    "Açılış Saati": saat1 if saat1 else "",
+                    "BAŞLANGIÇ KM": km1,
+                    "BİTİŞ KM": km2,
+                    "YAPILAN KM": km2 - km1,
+                    "Kapanış Saati": saat2 if saat2 else "",
+                    "AÇIKLAMA": ""
+                })
                 i += 1
 
         if pairs:
-            result = pd.DataFrame(pairs, columns=["Giriş", "Çıkış"])
-            result["Fark"] = result["Çıkış"] - result["Giriş"]
+            result = pd.DataFrame(pairs)
 
             st.subheader("📊 Giriş – Çıkış – Fark Sonuçları")
             st.dataframe(result, use_container_width=True)
@@ -164,7 +193,7 @@ if st.button("🚀 Kilometre Okumayı Başlat"):
 
             with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
                 result.to_excel(writer, sheet_name="Sonuçlar", index=False)
-                # df.to_excel(writer, sheet_name="Ham Veri", index=False)
+                df.to_excel(writer, sheet_name="Ham Veri", index=False)
             
             buffer.seek(0)
 
@@ -177,5 +206,4 @@ if st.button("🚀 Kilometre Okumayı Başlat"):
 
             st.success("✅ İşlem tamamlandı!")
         else:
-
             st.warning("Eşleştirme yapılabilecek yeterli veri bulunamadı.")
